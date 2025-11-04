@@ -6,11 +6,14 @@ import { ResultCard } from '../components/ResultCard';
 import { Heatmap } from '../components/Heatmap';
 import { MetricsCard } from '../components/MetricsCard';
 import { StatusBar } from 'expo-status-bar';
+import { localScans } from '../services/localScans';
+import { useAuth } from '../store/auth';
 
 export const HistoryScreen: React.FC = () => {
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const userId = useAuth(state => state.user?.id);
 
   useEffect(() => {
     loadScans();
@@ -20,8 +23,19 @@ export const HistoryScreen: React.FC = () => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await api.getScans();
-      setScans(response);
+      // Local first (filtered by userId if authenticated)
+      const local = await localScans.getAll(userId);
+      setScans(local as unknown as ScanRecord[]);
+      // Best-effort remote merge
+      api.getScans()
+        .then(remote => {
+          if (!Array.isArray(remote)) return;
+          // Merge: prefer local first, append remote not present by timestamp/id
+          const existingIds = new Set(local.map(s => s.id));
+          const merged = [...local, ...remote.filter(r => !existingIds.has(r.id))];
+          setScans(merged);
+        })
+        .catch(() => {});
     } catch (err) {
       setError('Failed to load scan history. Please try again later.');
     } finally {

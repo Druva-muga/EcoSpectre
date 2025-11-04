@@ -18,7 +18,7 @@ interface Props {
   duration?: number;
 }
 
-export const ScoreGauge: React.FC<Props> = ({
+const ScoreGaugeComponent: React.FC<Props> = ({
   score,
   size = 200,
   strokeWidth = 15,
@@ -28,13 +28,7 @@ export const ScoreGauge: React.FC<Props> = ({
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  // Calculate color based on score
-  const getColor = (value: number) => {
-    if (value >= 80) return '#4CAF50';
-    if (value >= 60) return '#8BC34A';
-    if (value >= 40) return '#FFC107';
-    return '#F44336';
-  };
+  // Note: Avoid capturing non-worklet functions inside animated props
 
   useEffect(() => {
     progress.value = withTiming(score / 100, {
@@ -49,9 +43,19 @@ export const ScoreGauge: React.FC<Props> = ({
 
   const animatedProps = useAnimatedProps(() => {
     const strokeDashoffset = circumference * (1 - progress.value);
+    const value = progress.value * 100;
+    // Compute color inline inside the worklet to avoid capturing JS closures
+    let color = '#F44336';
+    if (value >= 80) {
+      color = '#4CAF50';
+    } else if (value >= 60) {
+      color = '#8BC34A';
+    } else if (value >= 40) {
+      color = '#FFC107';
+    }
     return {
       strokeDashoffset,
-      stroke: getColor(progress.value * 100),
+      stroke: color,
     };
   });
 
@@ -95,6 +99,9 @@ export const ScoreGauge: React.FC<Props> = ({
     </View>
   );
 };
+
+export const ScoreGauge = React.memo(ScoreGaugeComponent);
+ScoreGauge.displayName = 'ScoreGauge';
 
 const styles = StyleSheet.create({
   container: {

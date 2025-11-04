@@ -51,9 +51,90 @@ class RateLimiter {
 
 const rateLimiter = new RateLimiter();
 
+function parseJsonFromText(text: string) {
+  // Fast path
+  try {
+    return JSON.parse(text);
+  } catch {}
+
+  // Try to extract the first top-level JSON object by brace matching
+  let start = -1;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        const candidate = text.slice(start, i + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {}
+      }
+    }
+  }
+  // Fallback: strip code fences if present
+  const fenced = text.replace(/^```(json)?/gi, '').replace(/```$/g, '').trim();
+  return JSON.parse(fenced);
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetries(
+  url: string,
+  options: RequestInit,
+  {
+    retries = 3,
+    baseDelayMs = 1000,
+    timeoutMs = 15000,
+  }: { retries?: number; baseDelayMs?: number; timeoutMs?: number } = {}
+): Promise<Response> {
+  let attempt = 0;
+  let lastError: any = null;
+  while (attempt <= retries) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) return res;
+
+      // Try to parse error payload for message/status
+      let errorMessage = `API Error: ${res.status}`;
+      try {
+        const errJson = await res.json();
+        errorMessage = errJson.error?.message || errorMessage;
+      } catch {}
+
+      // Retry on typical transient statuses
+      if ([429, 500, 502, 503, 504].includes(res.status) || /overloaded|quota|rate limit/i.test(errorMessage)) {
+        if (attempt === retries) {
+          throw new Error(errorMessage);
+        }
+      } else {
+        throw new Error(errorMessage);
+      }
+    } catch (err) {
+      lastError = err;
+      if (attempt === retries) break;
+    }
+
+    const delay = baseDelayMs * Math.pow(2, attempt); // exponential backoff
+    await sleep(delay);
+    attempt++;
+  }
+  throw (lastError instanceof Error ? lastError : new Error('Network error'));
+}
+
 export async function getGeminiApiKey(): Promise<string | null> {
   const storedKey = await SecureStore.getItemAsync(GEMINI_API_KEY_STORAGE);
-  return storedKey || ENV.GEMINI_API_KEY;
+  if (storedKey) return storedKey;
+  // Fallback to env only if it's not empty
+  return ENV.GEMINI_API_KEY || null;
 }
 
 export async function setGeminiApiKey(apiKey: string): Promise<void> {
@@ -120,11 +201,11 @@ Return EXACTLY one JSON object (no extra text) with the following keys. If a val
       }
     };
 
-    const response = await fetch(apiUrl, {
+    const response = await fetchWithRetries(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
-    });
+    }, { retries: 3, baseDelayMs: 1000, timeoutMs: 20000 });
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -140,7 +221,8 @@ Return EXACTLY one JSON object (no extra text) with the following keys. If a val
       throw new Error("Invalid response from vision API.");
     }
 
-    const result: GeminiVisionAnalysis = JSON.parse(data.candidates[0].content.parts[0].text);
+    const text = data.candidates[0].content.parts[0].text;
+    const result: GeminiVisionAnalysis = parseJsonFromText(text);
     
     // Validate response structure
     if (!result.detected_labels || !result.packaging_type || !result.material_hints) {
@@ -215,11 +297,11 @@ Rules:
       }
     };
 
-    const response = await fetch(apiUrl, {
+    const response = await fetchWithRetries(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
-    });
+    }, { retries: 3, baseDelayMs: 1000, timeoutMs: 20000 });
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -232,7 +314,8 @@ Rules:
       throw new Error("Invalid response from scoring API.");
     }
 
-    const result: SustainabilityScore = JSON.parse(data.candidates[0].content.parts[0].text);
+    const text = data.candidates[0].content.parts[0].text;
+    const result: SustainabilityScore = parseJsonFromText(text);
 
     // Validate response structure
     if (!result.score || !result.breakdown || !result.top_factors || !result.suggestion || !result.disposal) {

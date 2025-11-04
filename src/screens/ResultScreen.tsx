@@ -5,6 +5,7 @@ import { RootStackParamList } from '../types';
 import { ResultCard } from '../components/ResultCard';
 import { useAuth } from '../store/auth';
 import { api } from '../services/api';
+import { localScans } from '../services/localScans';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Result'>;
 
@@ -16,42 +17,35 @@ export const ResultScreen: React.FC<Props> = ({ route, navigation }) => {
   const handleAction = async (action: 'consume' | 'reject') => {
     if (isProcessing) return;
 
+    setIsProcessing(true);
+    const decidedAction = action === 'consume' ? 'consumed' : 'rejected';
+
+    // Optimistic local save; never block UI
     try {
-      setIsProcessing(true);
-      // Log the scan to MongoDB with the correct action type
+      await localScans.add({
+        context: scanRecord.context,
+        score: scanRecord.score,
+        action: decidedAction,
+        timestamp: Date.now(),
+        pending: true,
+        userId: userId || 'local',
+      });
+    } catch {}
+
+    // Navigate back immediately
+    navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+
+    // Best-effort network save in background
+    try {
       await api.createScan(
         scanRecord.context,
         scanRecord.score,
-        action === 'consume' ? 'consumed' : 'rejected'
+        decidedAction
       );
-      
-      // Navigate back to the scan screen
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
-    } catch (error) {
-      Alert.alert(
-        'Error',
-        'Failed to save your action. Please try again.',
-        [
-          {
-            text: 'Retry',
-            onPress: () => handleAction(action),
-          },
-          {
-            text: 'Cancel',
-            onPress: () => {
-              // Navigate anyway - we don't want to block the user
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Main' }],
-              });
-            },
-            style: 'cancel',
-          },
-        ],
-      );
+      // Optionally could mark latest pending as synced; skipping id matching for simplicity
+    } catch (e) {
+      // Swallow; history still shows from local
+      console.warn('[Result] Network save failed, kept locally');
     } finally {
       setIsProcessing(false);
     }

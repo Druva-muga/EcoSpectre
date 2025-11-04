@@ -21,7 +21,7 @@ interface Props {
   disabled?: boolean;
 }
 
-export const ResultCard: React.FC<Props> = ({ 
+const ResultCardComponent: React.FC<Props> = ({ 
   score, 
   context, 
   onAction,
@@ -121,6 +121,9 @@ export const ResultCard: React.FC<Props> = ({
     </GestureDetector>
   );
 };
+
+export const ResultCard = React.memo(ResultCardComponent);
+ResultCard.displayName = 'ResultCard';
 
 const styles = StyleSheet.create({
   card: {

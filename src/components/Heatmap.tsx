@@ -53,7 +53,7 @@ export const Heatmap: React.FC<Props> = ({ data, numWeeks = 12 }) => {
     return grid;
   };
 
-  const getColor = (score: number) => {
+  const getHeatColor = (score: number) => {
     if (score === 0) return '#EBEDF0';
     if (score >= 80) return '#216E39';
     if (score >= 60) return '#30A14E';
@@ -72,7 +72,7 @@ export const Heatmap: React.FC<Props> = ({ data, numWeeks = 12 }) => {
         {[0, 40, 60, 80, 100].map((score) => (
           <View
             key={score}
-            style={[styles.legendBox, { backgroundColor: getColor(score) }]}
+            style={[styles.legendBox, { backgroundColor: getHeatColor(score) }]}
           />
         ))}
         <Text style={styles.legendText}>More</Text>
@@ -99,7 +99,7 @@ export const Heatmap: React.FC<Props> = ({ data, numWeeks = 12 }) => {
                 y={dayIndex * (CELL_SIZE + CELL_PADDING)}
                 width={CELL_SIZE}
                 height={CELL_SIZE}
-                fill={getColor(day.averageScore)}
+                fill={getHeatColor(day.averageScore)}
                 rx={2}
               />
             ))

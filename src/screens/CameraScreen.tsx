@@ -1,11 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { StyleSheet, View, TouchableOpacity, Text, Alert, ActivityIndicator } from 'react-native';
-import Camera from 'expo-camera';
-
-const CameraType = {
-  back: 0,
-  front: 1,
-};
+import { Camera, CameraType } from 'expo-camera';
 
 const requestCameraPermissionsAsync = async () => {
   return await Camera.requestCameraPermissionsAsync();
@@ -62,15 +57,15 @@ export const CameraScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setIsProcessing(true);
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
+        quality: 0.6,
         skipProcessing: true,
       });
 
-      // Resize image to standard size for ML processing
+      // Optimize image for Gemini: resize to 512x512, compress to 0.65 for faster upload
       const processedImage = await manipulateAsync(
         photo.uri,
         [{ resize: { width: 512, height: 512 } }],
-        { compress: 0.8, format: SaveFormat.JPEG }
+        { compress: 0.65, format: SaveFormat.JPEG }
       );
 
       navigation.navigate('Processing', { imageUri: processedImage.uri });
@@ -96,10 +91,11 @@ export const CameraScreen: React.FC<Props> = ({ navigation }) => {
       });
 
       if (!result.canceled && result.assets[0]) {
+        // Optimize image for Gemini: resize to 512x512, compress to 0.65 for faster upload
         const processedImage = await manipulateAsync(
           result.assets[0].uri,
           [{ resize: { width: 512, height: 512 } }],
-          { compress: 0.8, format: SaveFormat.JPEG }
+          { compress: 0.65, format: SaveFormat.JPEG }
         );
         
         navigation.navigate('Processing', { imageUri: processedImage.uri });

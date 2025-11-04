@@ -2,6 +2,8 @@ import { SustainabilityScore, ScanContext, ScanRecord } from './index';
 
 export type RootStackParamList = {
   Auth: undefined;
+  Login: undefined;
+  Signup: undefined;
   Main: undefined;
   Camera: undefined;
   Processing: { imageUri: string };

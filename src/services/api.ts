@@ -1,8 +1,26 @@
 import { ScanContext, SustainabilityScore, User, ScanRecord } from '../types';
 import * as SecureStore from 'expo-secure-store';
+import { Platform, NativeModules } from 'react-native';
 
-const API_URL = __DEV__ 
-  ? 'http://localhost:5000/api'
+function getDevApiBase(): string {
+  try {
+    // Works in Expo Go: derive host from JS bundle URL
+    // e.g., "http://192.168.0.10:8081/index.bundle?platform=android&dev=true"
+    const scriptURL: string | undefined = (NativeModules as any)?.SourceCode?.scriptURL;
+    if (scriptURL) {
+      const match = scriptURL.match(/https?:\/\/([^/:]+)(?::\d+)?/i);
+      const host = match?.[1];
+      if (host) {
+        return `http://${host}:5000/api`;
+      }
+    }
+  } catch {}
+  // Fallback (may fail on real device if backend not reachable at localhost)
+  return 'http://localhost:5000/api';
+}
+
+const API_URL = __DEV__
+  ? getDevApiBase()
   : 'https://your-production-url.com/api';
 
 const TOKEN_KEY = 'AUTH_TOKEN';
@@ -27,17 +45,37 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const url = `${API_URL}${endpoint}`;
+  // Add timeout + abort support
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased to 15s for auth
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Network error' }));
-    throw new Error(error.message || 'API request failed');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Network error' }));
+      console.error('[API] Request failed', {
+        url,
+        status: response.status,
+        message: error.message,
+      });
+      throw new Error(error.message || 'API request failed');
+    }
+
+    return response.json();
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
+    }
+    throw error;
   }
-
-  return response.json();
 }
 
 export const api = {
@@ -48,7 +86,7 @@ export const api = {
       body: JSON.stringify({ email, password }),
     });
     await setAuthToken(response.token);
-    return response.user;
+    return { token: response.token, user: response.user };
   },
 
   async register(email: string, password: string) {
@@ -57,7 +95,7 @@ export const api = {
       body: JSON.stringify({ email, password }),
     });
     await setAuthToken(response.token);
-    return response.user;
+    return { token: response.token, user: response.user };
   },
 
   async logout() {

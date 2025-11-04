@@ -23,8 +23,11 @@ export const ProfileScreen: React.FC = () => {
 
   const handleSignOut = async () => {
     try {
-      await SecureStore.deleteItemAsync('auth_token');
-      signOut();
+      await signOut();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Auth' }],
+      });
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -37,10 +40,18 @@ export const ProfileScreen: React.FC = () => {
         <List.Section>
           <List.Subheader>Account</List.Subheader>
           <List.Item
-            title="Email"
-            description={user?.email}
+            title={user ? "Email" : "Account"}
+            description={user?.email || "Guest Mode"}
             left={(props: any) => <List.Icon {...props} icon="email" />}
           />
+          {!user && (
+            <List.Item
+              title="Sign In"
+              description="Sign in to sync your data"
+              left={(props: any) => <List.Icon {...props} icon="login" />}
+              onPress={() => navigation.navigate('Auth')}
+            />
+          )}
           <List.Item
             title="Change Password"
             left={(props: any) => <List.Icon {...props} icon="lock" />}
@@ -93,12 +104,14 @@ export const ProfileScreen: React.FC = () => {
           />
         </List.Section>
 
-        <List.Item
-          title="Sign Out"
-          left={(props: any) => <List.Icon {...props} icon="logout" color="#f44336" />}
-          onPress={handleSignOut}
-          titleStyle={{ color: '#f44336' }}
-        />
+        {user && (
+          <List.Item
+            title="Sign Out"
+            left={(props: any) => <List.Icon {...props} icon="logout" color="#f44336" />}
+            onPress={handleSignOut}
+            titleStyle={{ color: '#f44336' }}
+          />
+        )}
       </ScrollView>
     </View>
   );

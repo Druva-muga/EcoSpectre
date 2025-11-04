@@ -61,7 +61,7 @@ interface Props {
   };
 }
 
-export const BreakdownBars: React.FC<Props> = ({ breakdown }) => {
+const BreakdownBarsComponent: React.FC<Props> = ({ breakdown }) => {
   const items = [
     { label: 'Materials', value: breakdown.materials },
     { label: 'Packaging', value: breakdown.packaging },
@@ -82,6 +82,9 @@ export const BreakdownBars: React.FC<Props> = ({ breakdown }) => {
     </View>
   );
 };
+
+export const BreakdownBars = React.memo(BreakdownBarsComponent);
+BreakdownBars.displayName = 'BreakdownBars';
 
 const getBarColor = (value: number) => {
   if (value >= 80) return '#4CAF50';
