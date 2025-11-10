@@ -109,6 +109,7 @@ export const HistoryScreen: React.FC = () => {
             context={item.context}
             onAction={(action) => {}} // No action needed in history view
             disabled={true}
+            action={item.action}
           />
         )}
         ListHeaderComponent={() => (

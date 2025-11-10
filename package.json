@@ -4,8 +4,8 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "axios": "^1.6.0",
     "expo": "~49.0.15",
     "expo-camera": "~13.4.4",
+    "expo-dev-client": "~2.4.13",
     "expo-file-system": "~15.4.5",
     "expo-image-manipulator": "~11.3.0",
     "expo-image-picker": "~17.0.8",
@@ -29,10 +30,12 @@
     "react-native-safe-area-context": "4.6.3",
     "react-native-screens": "~3.22.0",
     "react-native-svg": "13.9.0",
-    "zustand": "^4.4.6"
+    "zustand": "^4.4.6",
+    "expo-splash-screen": "~0.20.5"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "@expo/android-manifest": "^0.2.5",
     "@types/react": "~18.2.14",
     "typescript": "^5.1.3"
   },
