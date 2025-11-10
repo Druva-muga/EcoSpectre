@@ -1,13 +1,14 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import Animated, {
   useAnimatedProps,
   useSharedValue,
   withTiming,
   Easing,
+  useDerivedValue,
+  runOnJS,
 } from 'react-native-reanimated';
-import { useDerivedValue } from 'react-native-reanimated';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -25,34 +26,41 @@ const ScoreGaugeComponent: React.FC<Props> = ({
   duration = 1500,
 }) => {
   const progress = useSharedValue(0);
+  const [displayScore, setDisplayScore] = React.useState(0);
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  // Note: Avoid capturing non-worklet functions inside animated props
-
   useEffect(() => {
-    progress.value = withTiming(score / 100, {
+    // Normalize score for the progress animation (0-1)
+    const normalizedScore = Math.min(Math.max(score, 0), 100) / 100;
+    progress.value = withTiming(normalizedScore, {
       duration,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
     });
-  }, [score]);
+  }, [score, duration]);
 
-  const displayScore = useDerivedValue(() => {
-    return Math.round(progress.value * 100);
+  // Update display score on the JS thread
+  useDerivedValue(() => {
+    const currentScore = Math.round(progress.value * 100);
+    runOnJS(setDisplayScore)(currentScore);
   });
 
-  const animatedProps = useAnimatedProps(() => {
+  const animatedCircleProps = useAnimatedProps(() => {
     const strokeDashoffset = circumference * (1 - progress.value);
-    const value = progress.value * 100;
-    // Compute color inline inside the worklet to avoid capturing JS closures
-    let color = '#F44336';
-    if (value >= 80) {
-      color = '#4CAF50';
-    } else if (value >= 60) {
-      color = '#8BC34A';
-    } else if (value >= 40) {
-      color = '#FFC107';
+    const currentScore = Math.round(progress.value * 100);
+    
+    // Color transitions based on score ranges
+    let color = '#F44336'; // Default red for poor scores
+    if (currentScore >= 80) {
+      color = '#4CAF50'; // Green for excellent
+    } else if (currentScore >= 60) {
+      color = '#8BC34A'; // Light green for good
+    } else if (currentScore >= 40) {
+      color = '#FFC107'; // Yellow/amber for moderate
+    } else if (currentScore >= 20) {
+      color = '#FF9800'; // Orange for poor
     }
+    
     return {
       strokeDashoffset,
       stroke: color,
@@ -80,7 +88,7 @@ const ScoreGaugeComponent: React.FC<Props> = ({
           fill="none"
           strokeDasharray={circumference}
           strokeLinecap="round"
-          animatedProps={animatedProps}
+          animatedProps={animatedCircleProps}
           transform={`rotate(-90, ${size / 2}, ${size / 2})`}
         />
         {/* Score text */}
@@ -93,7 +101,7 @@ const ScoreGaugeComponent: React.FC<Props> = ({
           textAnchor="middle"
           alignmentBaseline="middle"
         >
-          {displayScore.value}
+          {displayScore}
         </SvgText>
       </Svg>
     </View>

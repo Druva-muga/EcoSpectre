@@ -1,17 +1,20 @@
-import React from 'react';
-import { StyleSheet, View, Text, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Text, Dimensions, ScrollView, Pressable } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
+  interpolate,
+  Extrapolate,
   runOnJS,
 } from 'react-native-reanimated';
 import { ScoreGauge } from './ScoreGauge';
 import { BreakdownBars } from './BreakdownBars';
 import { SustainabilityScore, ScanContext } from '../types';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const THRESHOLD = SCREEN_WIDTH * 0.3;
 
 interface Props {
@@ -19,24 +22,36 @@ interface Props {
   context: ScanContext;
   onAction: (action: 'consume' | 'reject') => void;
   disabled?: boolean;
+  action?: 'rejected' | 'consumed';
 }
 
 const ResultCardComponent: React.FC<Props> = ({ 
   score, 
   context, 
   onAction,
-  disabled = false 
+  disabled = false,
+  action
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const translateX = useSharedValue(0);
-  const cardContext = useSharedValue({ height: 0 });
+  const scale = useSharedValue(1);
+  const expandProgress = useSharedValue(0);
 
   const handleComplete = (action: 'consume' | 'reject') => {
     'worklet';
     runOnJS(onAction)(action);
   };
 
-  const gesture = Gesture.Pan()
+  const toggleExpand = () => {
+    const newValue = !isExpanded;
+    setIsExpanded(newValue);
+    expandProgress.value = withTiming(newValue ? 1 : 0, { duration: 300 });
+    scale.value = withSpring(newValue ? 1.02 : 1);
+  };
+
+  const pan = Gesture.Pan()
     .enabled(!disabled)
+    .activeOffsetX([-20, 20])
     .onUpdate((event) => {
       translateX.value = event.translationX;
     })
@@ -54,70 +69,128 @@ const ResultCardComponent: React.FC<Props> = ({
       }
     });
 
+  const vertical = Gesture.Pan()
+    .enabled(!disabled)
+    .activeOffsetY([-5, 5]);
+
   const rStyle = useAnimatedStyle(() => {
     const rotate = `${(translateX.value / SCREEN_WIDTH) * 20}deg`;
+    const borderRadius = interpolate(
+      expandProgress.value,
+      [0, 1],
+      [20, 0],
+      Extrapolate.CLAMP
+    );
+    const marginHorizontal = interpolate(
+      expandProgress.value,
+      [0, 1],
+      [20, 0],
+      Extrapolate.CLAMP
+    );
+    const marginVertical = interpolate(
+      expandProgress.value,
+      [0, 1],
+      [10, 0],
+      Extrapolate.CLAMP
+    );
+    const height = interpolate(
+      expandProgress.value,
+      [0, 1],
+      [SCREEN_HEIGHT * 0.75, SCREEN_HEIGHT],
+      Extrapolate.CLAMP
+    );
+
     return {
       transform: [
         { translateX: translateX.value },
         { rotate },
+        { scale: scale.value }
       ],
+      borderRadius,
+      marginHorizontal,
+      marginVertical,
+      height,
     };
   });
 
+  const gesture = Gesture.Race(pan, vertical);
+
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.card, rStyle]}>
-        <View style={styles.scoreContainer}>
-          <ScoreGauge score={score.score} />
-        </View>
-
-        <View style={styles.breakdownContainer}>
-          <Text style={styles.sectionTitle}>Score Breakdown</Text>
-          <BreakdownBars breakdown={score.breakdown} />
-        </View>
-
-        <View style={styles.contextContainer}>
-          <Text style={styles.sectionTitle}>Product Analysis</Text>
-          <Text style={styles.contextText}>
-            <Text style={styles.label}>Brand: </Text>
-            {context.brand_text || 'Unknown'}
-          </Text>
-          <Text style={styles.contextText}>
-            <Text style={styles.label}>Type: </Text>
-            {context.packaging_type}
-          </Text>
-          <Text style={styles.contextText}>
-            <Text style={styles.label}>Material: </Text>
-            {context.material_hints}
-          </Text>
-        </View>
-
-        <View style={styles.factorsContainer}>
-          <Text style={styles.sectionTitle}>Key Factors</Text>
-          {score.top_factors.map((factor, index) => (
-            <View
-              key={index}
-              style={[
-                styles.factor,
-                { borderColor: factor.impact === 'positive' ? '#4CAF50' : '#F44336' },
-              ]}
-            >
-              <Text style={styles.factorTitle}>{factor.factor}</Text>
-              <Text style={styles.factorExplanation}>{factor.explanation}</Text>
+      <Pressable onPress={toggleExpand}>
+        <Animated.View style={[styles.card, rStyle]}>
+          {action && (
+            <View style={[
+              styles.actionBadge,
+              { backgroundColor: action === 'consumed' ? '#4CAF50' : '#F44336' }
+            ]}>
+              <Text style={styles.actionText}>
+                {action === 'consumed' ? 'Accepted' : 'Rejected'}
+              </Text>
             </View>
-          ))}
-        </View>
+          )}
 
-        <View style={styles.footer}>
-          <Text style={styles.suggestion}>{score.suggestion}</Text>
-          <Text style={styles.disposal}>{score.disposal}</Text>
-        </View>
+          <View style={styles.scoreContainer}>
+            <ScoreGauge score={score ? score.score : 0} />
+          </View>
 
-        <View style={styles.swipeHint}>
-          <Text style={styles.swipeText}>← Swipe left to reject</Text>
-          <Text style={styles.swipeText}>Swipe right to consume →</Text>
-        </View>
-      </Animated.View>
+          <ScrollView 
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            bounces={isExpanded}
+            scrollEnabled={isExpanded}
+          >
+            <View style={styles.breakdownContainer}>
+              <Text style={styles.sectionTitle}>Score Breakdown</Text>
+              <BreakdownBars breakdown={score.breakdown} />
+            </View>
+
+            <View style={styles.contextContainer}>
+              <Text style={styles.sectionTitle}>Product Analysis</Text>
+              <Text style={styles.contextText}>
+                <Text style={styles.label}>Brand: </Text>
+                {context.brand_text || 'Unknown'}
+              </Text>
+              <Text style={styles.contextText}>
+                <Text style={styles.label}>Type: </Text>
+                {context.packaging_type}
+              </Text>
+              <Text style={styles.contextText}>
+                <Text style={styles.label}>Material: </Text>
+                {context.material_hints}
+              </Text>
+            </View>
+
+            <View style={styles.factorsContainer}>
+              <Text style={styles.sectionTitle}>Key Factors</Text>
+              {score.top_factors.map((factor, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.factor,
+                    { borderColor: factor.impact === 'positive' ? '#4CAF50' : '#F44336' },
+                  ]}
+                >
+                  <Text style={styles.factorTitle}>{factor.factor}</Text>
+                  <Text style={styles.factorExplanation}>{factor.explanation}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.footer}>
+              <Text style={styles.suggestion}>{score.suggestion}</Text>
+              <Text style={styles.disposal}>{score.disposal}</Text>
+            </View>
+          </ScrollView>
+
+          {!disabled && !action && (
+            <View style={styles.swipeHint}>
+              <Text style={styles.swipeText}>← Reject</Text>
+              <Text style={styles.swipeText}>Accept →</Text>
+            </View>
+          )}
+        </Animated.View>
+      </Pressable>
     </GestureDetector>
   );
 };
@@ -137,10 +210,29 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    height: 500,
+    overflow: 'hidden',
+  },
+  actionBadge: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    zIndex: 1,
+  },
+  actionText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 13,
   },
   scoreContainer: {
     alignItems: 'center',
     marginBottom: 20,
+  },
+  content: {
+    flex: 1,
   },
   breakdownContainer: {
     marginBottom: 20,
@@ -201,11 +293,15 @@ const styles = StyleSheet.create({
   swipeHint: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
-    paddingHorizontal: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    paddingTop: 12,
+    paddingHorizontal: 5,
+    marginTop: 15,
   },
   swipeText: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
   },
 });

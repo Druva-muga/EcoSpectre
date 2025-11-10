@@ -1,9 +1,11 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { StyleSheet, View, TouchableOpacity, Text, Alert, ActivityIndicator } from 'react-native';
-import Camera from 'expo-camera';
+import { Camera as ExpoCamera } from 'expo-camera';
 import { CameraType } from 'expo-camera/build/Camera.types';
 
-const requestCameraPermissionsAsync = () => Camera.requestCameraPermissionsAsync();
+const requestCameraPermissionsAsync = async () => {
+  return ExpoCamera.requestCameraPermissionsAsync();
+};
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,7 +20,7 @@ export const CameraScreen: React.FC<Props> = ({ navigation }) => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const cameraRef = useRef<Camera>(null);
+  const cameraRef = useRef<ExpoCamera>(null);
   const isFocused = useIsFocused();
 
   React.useEffect(() => {
@@ -115,7 +117,7 @@ export const CameraScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <Camera
+      <ExpoCamera
         ref={cameraRef}
         style={styles.camera}
         type={CameraType.back}
@@ -137,7 +139,7 @@ export const CameraScreen: React.FC<Props> = ({ navigation }) => {
             Position product within the frame
           </Text>
         </View>
-      </Camera>
+      </ExpoCamera>
 
       <View style={styles.controls}>
         <TouchableOpacity 
